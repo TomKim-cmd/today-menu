@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>오늘 뭐 사지? 🎲 랜덤 국내 주식 추천</title>
+  <meta name="description" content="고민될 땐 운에 맡겨봐. 오늘의 랜덤 국내 주식 한 종목." />
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Pretendard -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet" />
+
+  <style>
+    html, body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif; }
+
+    /* 배경 그라데이션 + 살짝의 노이즈 */
+    .app-bg {
+      background:
+        radial-gradient(1200px 600px at 10% -10%, rgba(168, 85, 247, .45), transparent 60%),
+        radial-gradient(900px 600px at 110% 10%, rgba(236, 72, 153, .40), transparent 60%),
+        radial-gradient(900px 700px at 50% 110%, rgba(56, 189, 248, .35), transparent 60%),
+        linear-gradient(180deg, #0b0420 0%, #100735 100%);
+    }
+    .app-bg::before {
+      content: "";
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+      opacity: .6; pointer-events: none; z-index: 0;
+    }
+
+    /* 등장 애니메이션 */
+    @keyframes fadeUp { from {opacity:0; transform:translateY(14px);} to {opacity:1; transform:translateY(0);} }
+    .fade-up { animation: fadeUp .55s ease-out both; }
+
+    @keyframes pop { 0%{transform:scale(.85); opacity:0;} 60%{transform:scale(1.04); opacity:1;} 100%{transform:scale(1);} }
+    .pop { animation: pop .5s cubic-bezier(.2,.8,.2,1) both; }
+
+    @keyframes floaty { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-6px);} }
+    .floaty { animation: floaty 3s ease-in-out infinite; }
+
+    @keyframes shine {
+      0% { background-position: -200% center; }
+      100% { background-position: 200% center; }
+    }
+    .shine-text {
+      background: linear-gradient(90deg, #fff 0%, #fef3c7 25%, #fff 50%, #fce7f3 75%, #fff 100%);
+      background-size: 200% auto;
+      -webkit-background-clip: text;
+              background-clip: text;
+      color: transparent;
+      animation: shine 3.5s linear infinite;
+    }
+
+    /* 카드 글래스 */
+    .glass {
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(20px) saturate(140%);
+      -webkit-backdrop-filter: blur(20px) saturate(140%);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+    }
+
+    /* 로딩 슬롯 텍스트가 위에서 아래로 흐르는 효과 */
+    @keyframes slot {
+      0%   { transform: translateY(0); }
+      100% { transform: translateY(-50%); }
+    }
+    .slot-track { animation: slot .35s linear infinite; }
+
+    /* 컨페티 */
+    .confetti {
+      position: absolute; width: 8px; height: 14px; top: -20px;
+      opacity: 0; border-radius: 2px;
+    }
+    @keyframes fall {
+      0%   { transform: translateY(0) rotate(0); opacity: 1; }
+      100% { transform: translateY(110vh) rotate(540deg); opacity: 0; }
+    }
+  </style>
+</head>
+
+<body class="app-bg min-h-screen text-white overflow-x-hidden">
+  <main class="relative z-10 max-w-md mx-auto px-5 pt-10 pb-16 min-h-screen flex flex-col">
+
+    <!-- 헤더 -->
+    <header class="text-center mb-8 fade-up">
+      <p class="text-xs tracking-[0.3em] text-white/60 mb-3">RANDOM PICK · KOREA</p>
+      <h1 class="text-4xl md:text-5xl font-extrabold leading-tight tracking-tight">
+        <span class="shine-text">오늘 뭐 사지?</span>
+      </h1>
+      <p class="mt-3 text-white/70 text-sm md:text-base">
+        고민될 땐 운에 맡겨봐 🎲<br/>오늘의 랜덤 국내 주식 한 종목.
+      </p>
+    </header>
+
+    <!-- 카드 영역 -->
+    <section class="flex-1 flex items-center justify-center">
+      <div id="card" class="glass w-full rounded-3xl p-7 md:p-8 shadow-2xl shadow-fuchsia-500/20 fade-up">
+
+        <!-- IDLE 상태 -->
+        <div id="state-idle" class="text-center py-6">
+          <div class="text-6xl mb-4 floaty">🎰</div>
+          <p class="text-white/80 text-base mb-1">버튼을 눌러 오늘의 종목을 뽑아보세요</p>
+          <p class="text-white/50 text-xs">투자 권유가 아니에요. 그냥 재미로!</p>
+        </div>
+
+        <!-- LOADING 상태 -->
+        <div id="state-loading" class="hidden text-center py-6">
+          <p class="text-white/60 text-xs tracking-[0.25em] mb-3">DRAWING...</p>
+          <div class="h-12 overflow-hidden relative rounded-xl bg-white/5 border border-white/10">
+            <div id="slot" class="absolute inset-x-0 top-0 slot-track text-2xl font-bold flex flex-col items-center">
+              <!-- JS가 채움 -->
+            </div>
+          </div>
+          <div class="mt-4 flex justify-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-fuchsia-400 animate-bounce" style="animation-delay:0s"></span>
+            <span class="w-2 h-2 rounded-full bg-violet-400 animate-bounce" style="animation-delay:.15s"></span>
+            <span class="w-2 h-2 rounded-full bg-sky-400 animate-bounce" style="animation-delay:.3s"></span>
+          </div>
+        </div>
+
+        <!-- RESULT 상태 -->
+        <div id="state-result" class="hidden">
+          <div class="text-center pop">
+            <p class="text-white/60 text-xs tracking-[0.25em] mb-3">TODAY'S PICK</p>
+
+            <div id="r-emoji" class="text-6xl mb-3">📈</div>
+
+            <h2 id="r-name" class="text-3xl font-extrabold mb-1">―</h2>
+            <p id="r-ticker" class="text-white/60 text-sm font-mono mb-4">―</p>
+
+            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/15 text-xs">
+              <span id="r-market" class="font-semibold">―</span>
+              <span class="w-1 h-1 rounded-full bg-white/40"></span>
+              <span id="r-sector" class="text-white/80">―</span>
+            </div>
+
+            <div class="mt-5 p-4 rounded-2xl bg-gradient-to-br from-white/10 to-white/0 border border-white/10 text-left">
+              <p class="text-white/60 text-[11px] tracking-widest mb-1.5">왜 골랐을까?</p>
+              <p id="r-reason" class="text-white text-sm leading-relaxed">―</p>
+            </div>
+          </div>
+
+          <!-- 액션 -->
+          <div class="mt-6 grid grid-cols-2 gap-2.5">
+            <button id="btn-again" class="h-12 rounded-2xl bg-white/10 hover:bg-white/15 active:scale-95 border border-white/15 transition-all duration-300 font-semibold text-sm">
+              🔄 다시 뽑기
+            </button>
+            <button id="btn-share" class="h-12 rounded-2xl bg-white text-slate-900 hover:bg-white/90 active:scale-95 transition-all duration-300 font-semibold text-sm">
+              📤 공유하기
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 메인 CTA (idle 일 때만 노출) -->
+    <div id="cta-wrap" class="mt-6 fade-up">
+      <button id="btn-pick"
+        class="w-full h-14 rounded-2xl font-bold text-base text-white
+               bg-gradient-to-r from-violet-500 via-fuchsia-500 to-pink-500
+               shadow-xl shadow-fuchsia-500/40
+               hover:scale-[1.02] active:scale-95
+               transition-all duration-300">
+        ✨ 오늘의 종목 뽑기
+      </button>
+      <p class="text-center text-white/40 text-[11px] mt-3">
+        본 서비스는 투자 추천이 아닌 엔터테인먼트 콘텐츠입니다.
+      </p>
+    </div>
+
+  </main>
+
+  <!-- 컨페티 컨테이너 -->
+  <div id="confetti-root" class="fixed inset-0 pointer-events-none z-20 overflow-hidden"></div>
+
+<script>
+  // ===== 여기를 수정하면 추천 종목 목록이 바뀝니다 =====
+  const STOCKS = [
+    { name: "삼성전자",        ticker: "005930", market: "KOSPI",  sector: "반도체",   emoji: "📱", reason: "국민주. 모를 땐 그냥 이거." },
+    { name: "SK하이닉스",      ticker: "000660", market: "KOSPI",  sector: "반도체",   emoji: "💾", reason: "메모리 반도체의 또 다른 강자." },
+    { name: "LG에너지솔루션",  ticker: "373220", market: "KOSPI",  sector: "2차전지",  emoji: "🔋", reason: "전기차 시대의 배터리 빅플레이어." },
+    { name: "삼성바이오로직스",ticker: "207940", market: "KOSPI",  sector: "바이오",   emoji: "🧬", reason: "글로벌 바이오 CMO 1위급." },
+    { name: "현대차",          ticker: "005380", market: "KOSPI",  sector: "자동차",   emoji: "🚗", reason: "전기차/수소차로 변신 중인 거인." },
+    { name: "기아",            ticker: "000270", market: "KOSPI",  sector: "자동차",   emoji: "🏎️", reason: "디자인 잘 빠진 글로벌 메이커." },
+    { name: "NAVER",           ticker: "035420", market: "KOSPI",  sector: "인터넷",   emoji: "🟢", reason: "검색·커머스·AI 다 들고 있는 플랫폼." },
+    { name: "카카오",          ticker: "035720", market: "KOSPI",  sector: "인터넷",   emoji: "💛", reason: "국민 메신저의 모회사." },
+    { name: "셀트리온",        ticker: "068270", market: "KOSPI",  sector: "바이오",   emoji: "💊", reason: "바이오시밀러 글로벌 강자." },
+    { name: "POSCO홀딩스",     ticker: "005490", market: "KOSPI",  sector: "철강/2차전지", emoji: "⚙️", reason: "철강에 배터리 소재까지 더한 변신." },
+    { name: "한화에어로스페이스", ticker:"012450", market: "KOSPI", sector: "방산",    emoji: "🛰️", reason: "K-방산 대장주의 위상." },
+    { name: "현대로템",        ticker: "064350", market: "KOSPI",  sector: "방산/철도", emoji: "🚄", reason: "K2 전차와 KTX를 함께 만드는 회사." },
+    { name: "KB금융",          ticker: "105560", market: "KOSPI",  sector: "금융",     emoji: "🏦", reason: "은행주 끝판왕, 배당도 든든." },
+    { name: "신한지주",        ticker: "055550", market: "KOSPI",  sector: "금융",     emoji: "💳", reason: "꾸준한 배당이 매력인 금융지주." },
+    { name: "크래프톤",        ticker: "259960", market: "KOSPI",  sector: "게임",     emoji: "🎮", reason: "배그(PUBG)로 글로벌 흥행한 게임사." },
+    { name: "엔씨소프트",      ticker: "036570", market: "KOSPI",  sector: "게임",     emoji: "⚔️", reason: "리니지의 본가, 새 IP를 준비 중." },
+    { name: "HMM",             ticker: "011200", market: "KOSPI",  sector: "해운",     emoji: "🚢", reason: "운임 사이클에 따라 출렁이는 해운주." },
+    { name: "대한항공",        ticker: "003490", market: "KOSPI",  sector: "항공",     emoji: "✈️", reason: "여행 수요와 함께 가는 1등 항공사." },
+    { name: "CJ제일제당",      ticker: "097950", market: "KOSPI",  sector: "음식료",   emoji: "🥟", reason: "비비고로 K-푸드 글로벌 진출." },
+    { name: "오리온",          ticker: "271560", market: "KOSPI",  sector: "음식료",   emoji: "🍫", reason: "초코파이로 세계를 정복한 회사." },
+    { name: "에코프로비엠",    ticker: "247540", market: "KOSDAQ", sector: "2차전지",  emoji: "🔌", reason: "양극재 글로벌 점유율 상위 플레이어." },
+    { name: "알테오젠",        ticker: "196170", market: "KOSDAQ", sector: "바이오",   emoji: "🧪", reason: "피하주사 변환 기술로 주목받는 바이오." },
+    { name: "리노공업",        ticker: "058470", market: "KOSDAQ", sector: "반도체",   emoji: "🧷", reason: "테스트 핀 분야의 숨은 강자." },
+    { name: "JYP Ent.",        ticker: "035900", market: "KOSDAQ", sector: "엔터",     emoji: "🎤", reason: "K-팝 글로벌 IP를 키우는 엔터사." },
+    { name: "에스엠",          ticker: "041510", market: "KOSDAQ", sector: "엔터",     emoji: "🎶", reason: "SM 아이돌 군단을 보유한 엔터." },
+    { name: "하이브",          ticker: "352820", market: "KOSPI",  sector: "엔터",     emoji: "💜", reason: "BTS·뉴진스가 있는 그 회사." },
+    { name: "에코프로",        ticker: "086520", market: "KOSDAQ", sector: "2차전지",  emoji: "♻️", reason: "양극재 소재 생태계의 핵심." },
+    { name: "두산에너빌리티",  ticker: "034020", market: "KOSPI",  sector: "원전/발전", emoji: "⚡", reason: "원전 르네상스 기대주." },
+    { name: "한국전력",        ticker: "015760", market: "KOSPI",  sector: "전기",     emoji: "💡", reason: "전기 요금 인상 사이클의 핵심." },
+    { name: "LG화학",          ticker: "051910", market: "KOSPI",  sector: "화학",     emoji: "🧴", reason: "석유화학에 배터리 소재까지." },
+  ];
+
+  // 한 마디 추천 톤
+  const TAGLINES = [
+    "오늘의 운명적 만남 💫",
+    "이건 그냥 느낌이 좋은데요? ✨",
+    "주사위가 굴러갔어요 🎲",
+    "오, 흥미로운 픽이네요 👀",
+    "오늘은 이걸로 가볼까요? 🚀",
+  ];
+
+  // ===== DOM =====
+  const $ = (id) => document.getElementById(id);
+  const card     = $("card");
+  const sIdle    = $("state-idle");
+  const sLoading = $("state-loading");
+  const sResult  = $("state-result");
+  const slot     = $("slot");
+  const ctaWrap  = $("cta-wrap");
+
+  const rEmoji  = $("r-emoji");
+  const rName   = $("r-name");
+  const rTicker = $("r-ticker");
+  const rMarket = $("r-market");
+  const rSector = $("r-sector");
+  const rReason = $("r-reason");
+
+  let lastPickedIdx = -1;
+
+  function pickRandom() {
+    if (STOCKS.length <= 1) return 0;
+    let i;
+    do { i = Math.floor(Math.random() * STOCKS.length); }
+    while (i === lastPickedIdx);
+    lastPickedIdx = i;
+    return i;
+  }
+
+  function buildSlot() {
+    // 슬롯에 보여줄 텍스트 (현재 종목명들을 위/아래로 두 번 이어 붙여 무한 흐름)
+    const items = STOCKS.map(s => `<div class="h-12 flex items-center justify-center">${s.emoji} ${s.name}</div>`).join("");
+    slot.innerHTML = items + items;
+  }
+
+  function show(state) {
+    sIdle.classList.toggle("hidden", state !== "idle");
+    sLoading.classList.toggle("hidden", state !== "loading");
+    sResult.classList.toggle("hidden", state !== "result");
+    ctaWrap.classList.toggle("hidden", state !== "idle");
+  }
+
+  function renderResult(stock) {
+    rEmoji.textContent  = stock.emoji;
+    rName.textContent   = stock.name;
+    rTicker.textContent = stock.ticker;
+    rMarket.textContent = stock.market;
+    rSector.textContent = stock.sector;
+    const tagline = TAGLINES[Math.floor(Math.random() * TAGLINES.length)];
+    rReason.innerHTML = `<span class="text-fuchsia-200">${tagline}</span><br/>${stock.reason}`;
+
+    // pop 재실행을 위해 클래스 토글
+    const popEl = sResult.querySelector(".pop");
+    popEl.classList.remove("pop"); void popEl.offsetWidth; popEl.classList.add("pop");
+  }
+
+  function fireConfetti() {
+    const root = $("confetti-root");
+    root.innerHTML = "";
+    const colors = ["#a78bfa", "#f472b6", "#38bdf8", "#fde68a", "#fb7185"];
+    for (let i = 0; i < 60; i++) {
+      const c = document.createElement("div");
+      c.className = "confetti";
+      c.style.left = Math.random() * 100 + "vw";
+      c.style.background = colors[i % colors.length];
+      const dur = 1.6 + Math.random() * 1.4;
+      const delay = Math.random() * 0.3;
+      c.style.animation = `fall ${dur}s ${delay}s ease-in forwards`;
+      c.style.transform = `rotate(${Math.random() * 360}deg)`;
+      root.appendChild(c);
+    }
+    setTimeout(() => (root.innerHTML = ""), 3500);
+  }
+
+  async function startPick() {
+    show("loading");
+    // 슬롯 굴리는 듯한 연출 시간
+    await new Promise(r => setTimeout(r, 1200 + Math.random() * 600));
+
+    const stock = STOCKS[pickRandom()];
+    renderResult(stock);
+    show("result");
+    fireConfetti();
+  }
+
+  async function share() {
+    const text = `오늘의 추천 종목은 "${rName.textContent} (${rTicker.textContent})" 🎲\n오늘 뭐 사지?에서 뽑았어요.`;
+    if (navigator.share) {
+      try { await navigator.share({ title: "오늘 뭐 사지?", text }); return; } catch {}
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      flashShareButton("📋 복사됨!");
+    } catch {
+      flashShareButton("공유를 지원하지 않아요");
+    }
+  }
+
+  function flashShareButton(msg) {
+    const btn = $("btn-share");
+    const original = btn.innerHTML;
+    btn.innerHTML = msg;
+    btn.disabled = true;
+    setTimeout(() => { btn.innerHTML = original; btn.disabled = false; }, 1400);
+  }
+
+  // ===== 이벤트 =====
+  buildSlot();
+  $("btn-pick").addEventListener("click", startPick);
+  $("btn-again").addEventListener("click", startPick);
+  $("btn-share").addEventListener("click", share);
+</script>
+</body>
+</html>
